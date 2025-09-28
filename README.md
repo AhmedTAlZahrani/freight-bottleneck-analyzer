@@ -1,7 +1,7 @@
 # freight-bottleneck-analyzer
 ## Data Sources
 
-- **Sample Data** (10 rows, included in this repo):  
+- **Sample Data** (50 rows, included in this repo):  
   [`data/raw/sample_bottlenecks.csv`](data/raw/sample_bottlenecks.csv)
 
 - **Full Dataset** (87 MB, too large for GitHub):  
