@@ -1,6 +1,5 @@
 # src/viz.py
 # Turn plots/top10_value.csv into a bar chart image: plots/top10_value.png
-
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
