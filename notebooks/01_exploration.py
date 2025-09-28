@@ -1,105 +1,143 @@
-# 01_exploration — Minimum Viable Analysis (MVA)
+# notebooks/01_exploration.py
+# Minimum Viable Analysis (MVA) for the Freight & Logistics Bottleneck Analyzer
+# - Loads data/raw/sample_bottlenecks.csv
+# - Normalizes FAF-style wide year columns (value_YYYY / current_value_YYYY) to long form
+# - Computes Top 10 Origin→Destination pairs by value for target year (2022 if present, else latest)
+# - Saves results to plots/top10_value.csv
+#
+# Run from repo root (or inside Codespaces):
+#   python notebooks/01_exploration.py
 
 import os
+import re
+import sys
 import pandas as pd
 
 # ---------- Paths ----------
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.abspath(os.path.join(HERE, ".."))
 DATA_RAW = os.path.join(ROOT, "data", "raw", "sample_bottlenecks.csv")
 PLOTS_DIR = os.path.join(ROOT, "plots")
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
 print("Project root:", ROOT)
-print("Loading:", DATA_RAW)
+print("Loading CSV:", DATA_RAW)
+if not os.path.exists(DATA_RAW):
+    print("ERROR: sample_bottlenecks.csv not found at:", DATA_RAW, file=sys.stderr)
+    sys.exit(1)
 
 # ---------- Load ----------
 df = pd.read_csv(DATA_RAW)
 print("\nColumns:", list(df.columns))
-print("\nPreview:")
-display(df.head())
 
-# ---------- Try to standardize likely column names ----------
-def pick(colnames, candidates):
-    for c in candidates:
-        if c in colnames:
-            return c
+# Utility: case-insensitive column matcher
+def find_col(candidates):
+    cols_lower = {c.lower(): c for c in df.columns}
+    for cand in candidates:
+        if cand.lower() in cols_lower:
+            return cols_lower[cand.lower()]
     return None
 
-cols = [c.lower() for c in df.columns]
-mapper = {c: c.lower() for c in df.columns}  # original -> lower
+# Likely column names in FAF5 extracts
+origin_col = find_col(["fr_orig", "orig", "origin", "origin_state", "dms_orig", "dms_origst", "o"])
+dest_col   = find_col(["fr_dest", "dest", "destination", "destination_state", "dms_dest", "dms_destst", "d"])
+mode_col   = find_col(["dms_mode", "fr_inmode", "mode"])
 
-# Likely candidates in FAF-like files
-origin_col = pick(cols, ["orig", "origin", "origin_state", "dms_orig", "o"])
-dest_col   = pick(cols, ["dest", "destination", "destination_state", "dms_dest", "d"])
-year_col   = pick(cols, ["year", "yr"])
-mode_col   = pick(cols, ["mode", "dms_mode"])
-value_col  = pick(cols, ["value", "val_milusd", "val", "dollars", "million_dollars"])
+# Wide year columns (e.g., value_2018, current_value_2024)
+value_year_cols = []
+for c in df.columns:
+    lc = c.lower()
+    if re.search(r"(^|_)value_20\d{2}$", lc) or re.search(r"(^|_)current_value_20\d{2}$", lc):
+        value_year_cols.append(c)
 
-needed = {
-    "origin": origin_col,
-    "dest": dest_col,
-    "year": year_col,
-    "mode": mode_col,
-    "value": value_col,
-}
-print("\nDetected columns:", needed)
+if not value_year_cols:
+    print("\nWARNING: No year-specific value columns found (e.g., value_2022 / current_value_2022).")
+    print("This sample may not include value fields. Exiting gracefully.")
+    sys.exit(0)
 
-missing = [k for k, v in needed.items() if v is None and k in ["origin","dest","year","value"]]
-if missing:
-    raise ValueError(f"Missing required columns for quick analysis: {missing}")
+print("\nDetected value-year columns:", value_year_cols[:8], "..." if len(value_year_cols) > 8 else "")
 
-# restore original case for selected columns
-def orig_case(lower_name):
-    for k, v in mapper.items():
-        if v == lower_name:
-            return k
-    return lower_name
+# Parse the year from column names, prefer "current_value_YYYY" over "value_YYYY" when both exist
+def parse_year(colname: str) -> int | None:
+    m = re.search(r"(?:^|_)(20\d{2})(?:$|_)", colname)
+    return int(m.group(1)) if m else None
 
-origin_col = orig_case(origin_col)
-dest_col   = orig_case(dest_col)
-year_col   = orig_case(year_col)
-value_col  = orig_case(value_col)
-mode_col   = orig_case(mode_col) if mode_col else None
+# Build a preference dict: for each year, pick the best column (current_value_YYYY > value_YYYY)
+year_to_col = {}
+for c in value_year_cols:
+    yr = parse_year(c)
+    if yr is None:
+        continue
+    old = year_to_col.get(yr)
+    # prefer 'current_value_' when both present
+    if old is None or (c.lower().startswith("current_value_") and not old.lower().startswith("current_value_")):
+        year_to_col[yr] = c
 
-# ---------- Basic facts ----------
-print("\nBasic facts:")
-print("Rows:", len(df))
-print("Unique origins:", df[origin_col].nunique())
-print("Unique destinations:", df[dest_col].nunique())
-print("Years available:", sorted(df[year_col].dropna().unique().tolist()))
+years_detected = sorted(year_to_col.keys())
+if not years_detected:
+    print("\nERROR: Could not infer any years from value columns.")
+    sys.exit(1)
 
-# pick a year (use 2022 if present, else most recent)
-years = sorted([int(y) for y in df[year_col].dropna().unique()])
-target_year = 2022 if 2022 in years else years[-1]
-print("Target year for MVA:", target_year)
+print("Years detected:", years_detected)
 
-# optionally filter by truck mode if present
-if mode_col and "truck" in set(str(x).lower() for x in df[mode_col].unique()):
-    df_year = df[(df[year_col] == target_year) & (df[mode_col].str.lower() == "truck")]
+# ---------- Reshape to long ----------
+# Keep only the columns we need to compute OD-by-value per year
+keep_cols = [c for c in [origin_col, dest_col, mode_col] if c is not None]
+wide = df[keep_cols + list(year_to_col.values())].copy()
+
+# Melt to long format: origin, dest, mode, year, value
+long = wide.melt(
+    id_vars=keep_cols,
+    value_vars=list(year_to_col.values()),
+    var_name="value_col",
+    value_name="value_million_usd"
+)
+
+# Extract year from the melted column name
+long["year"] = long["value_col"].apply(parse_year)
+long.drop(columns=["value_col"], inplace=True)
+
+# Clean types
+if mode_col:
+    long[mode_col] = long[mode_col].astype(str)
+
+# Pick target year: 2022 if available, else latest
+target_year = 2022 if 2022 in years_detected else years_detected[-1]
+print("\nTarget year:", target_year)
+
+# Optional filter to Truck mode when present
+if mode_col and any(str(x).lower() == "truck" for x in long[mode_col].dropna().unique()):
+    mask = (long["year"] == target_year) & (long[mode_col].str.lower() == "truck")
 else:
-    df_year = df[df[year_col] == target_year]
+    mask = (long["year"] == target_year)
 
-# ---------- Top 10 OD by value ----------
+subset = long.loc[mask].copy()
+
+# If origin/dest missing, try alternative fallbacks (rare, but defensive)
+if origin_col is None or dest_col is None:
+    print("\nERROR: Could not find origin/destination columns in the data.")
+    print("Looked for columns like fr_orig/dms_origst and fr_dest/dms_destst.")
+    sys.exit(1)
+
+# Aggregate value by OD pair
 agg = (
-    df_year
-    .groupby([origin_col, dest_col], dropna=False)[value_col]
+    subset
+    .groupby([origin_col, dest_col], dropna=False, as_index=False)["value_million_usd"]
     .sum()
-    .reset_index()
-    .sort_values(value_col, ascending=False)
+    .sort_values("value_million_usd", ascending=False)
     .head(10)
 )
 
-# nicer column names for output
+# Rename to clean, readable names for output
 agg = agg.rename(columns={
     origin_col: "origin",
-    dest_col: "destination",
-    value_col: "value_million_usd"
+    dest_col: "destination"
 })
 
-print("\nTop 10 OD pairs by value (", target_year, "):", sep="")
-display(agg)
+print("\nTop 10 OD by value (million USD) —", target_year)
+print(agg.to_string(index=False))
 
-# ---------- Save output ----------
+# ---------- Save ----------
 out_csv = os.path.join(PLOTS_DIR, "top10_value.csv")
 agg.to_csv(out_csv, index=False)
 print("\nSaved:", out_csv)
