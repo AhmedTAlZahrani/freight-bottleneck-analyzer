@@ -37,7 +37,28 @@
 
 ## 🛠 Repo Structure
 
----
+freight-bottleneck-analyzer/
+├─ README.md              # Executive summary + instructions
+├─ requirements.txt       # Python dependencies
+├─ data/
+│  ├─ raw/                # Original data (sample + link to full dataset)
+│  ├─ processed/          # Cleaned/derived data
+├─ src/
+│  ├─ load_data.py        # Functions to load and clean datasets
+│  ├─ indicators.py       # Calculations (delay hours, cost, emissions)
+│  ├─ ai_model.py         # ML models for congestion prediction
+│  ├─ viz.py              # Visualization scripts (charts & maps)
+│  └─ main.py             # Entry point to run analysis
+├─ notebooks/
+│  ├─ 01_exploration.ipynb   # Explore the data
+│  └─ 02_ai_prediction.ipynb # Train & test AI model
+├─ tests/
+│  ├─ test_indicators.py
+│  └─ test_ai_model.py
+├─ docs/
+│  └─ roadmap.md           # Project roadmap + task list
+├─ plots/                  # Output charts & maps
+
 
 ## 🎯 Learning Goals (for me as the builder)
 - Learn to frame infrastructure problems like a consultant.  
