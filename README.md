@@ -73,4 +73,34 @@ freight-bottleneck-analyzer/
 - Professional GitHub repo (clean, structured).  
 - Charts + maps highlighting bottlenecks.  
 - AI notebook forecasting congestion.  
-- Consulting-style README written for both **technical & business audiences**.  
+- Consulting-style README written for both **technical & business audiences**.
+- ---
+
+## 🤖 AI Component (Freight Value Prediction)
+The AI model uses real freight features such as **tonnage**, **distance**, and **miles traveled** to predict the total shipment value.
+
+- **Algorithm:** Linear Regression  
+- **R²:** 0.87 (model explains 87% of the variance)
+- **MAE:** 135.22 (average prediction error)
+- **Output:** [`plots/ai_predictions.csv`](plots/ai_predictions.csv)
+
+Example snippet:
+| actual | predicted |
+|---------|------------|
+| 7700.0 | 7550.4 |
+| 6550.0 | 6620.1 |
+| 2054.7 | 2109.3 |
+
+---
+
+### 🚀 Key Learnings
+- How to clean, reshape, and analyze freight data.  
+- How to visualize bottlenecks and corridor intensity.  
+- How to apply AI regression to predict freight values.  
+- How to structure a professional GitHub data project.
+
+---
+
+🧠 **Next Step (Week 2 Preview):**
+Add a **Random Forest AI model** to predict *delay hours* based on freight congestion and traffic data.
+
