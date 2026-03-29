@@ -1,5 +1,7 @@
 # Freight Bottleneck Analyzer
 
+![CI Pipeline](https://github.com/AhmedTAlZahrani/freight-bottleneck-analyzer/actions/workflows/ci.yml/badge.svg)
+
 A research tool for identifying and quantifying freight transport bottlenecks
 across U.S. state-to-state corridors using the FAF5.7.1 dataset (2018-2024).
 
