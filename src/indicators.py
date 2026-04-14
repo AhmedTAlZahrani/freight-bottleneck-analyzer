@@ -82,8 +82,6 @@ def compute_severity_score(df, year=2022):
         + 0.4 * merged["delay_index_norm"]
     )
 
-    # print("DEBUG severity stats:", merged["severity_score"].describe())
-
     return merged
 
 
